@@ -65,6 +65,15 @@ TASK_DIFFICULTY = {
 }
 
 
+def _normalize_score(s):
+    """Clamp score into strict (0, 1) open interval."""
+    if s >= 1.0:
+        return 0.99
+    if s <= 0.0:
+        return 0.01
+    return round(s, 4)
+
+
 @app.get("/tasks")
 def get_tasks():
     """Returns list of available tasks with metadata and action schema."""
@@ -114,7 +123,8 @@ def run_baseline():
                 break
 
         solved = env.current_state == env.target_state
-        scores[task["name"]] = 1.0 if solved else round(env._compute_similarity() * 0.5, 4)
+        raw = 1.0 if solved else round(env._compute_similarity() * 0.5, 4)
+        scores[task["name"]] = _normalize_score(raw)
 
     return scores
 
@@ -169,7 +179,7 @@ def grade_episode(episode: dict):
         score = 1.0
 
     return {
-        "score": round(score, 4),
+        "score": _normalize_score(round(score, 4)),
         "solved": solved,
         "steps": env._state.step_count,
         "total_reward": round(cumulative_reward, 4),
