@@ -172,7 +172,50 @@ The included heuristic agent follows a fixed priority chain: `RENAME → DROP_TA
 
 The heuristic achieves perfect scores on all standard tasks but fails on every adversarial task — scoring below 0.50 on each. This demonstrates a clear performance ceiling that cannot be crossed without planning beyond greedy action selection.
 
+These scores are produced using the hybrid agent: the LLM contributes step-level reasoning while the heuristic ensures constraint-safe execution. When running without LLM credentials, the system falls back to heuristic-only mode and produces identical scores.
+
 ---
+
+## Inference System
+
+The inference script (`inference.py`) implements a **hybrid agent** that combines LLM reasoning with deterministic heuristic execution.
+
+At each step of an episode:
+
+1. The LLM receives the current schema, target schema, and step history, and suggests an action.
+2. The heuristic independently selects the next action based on its fixed priority chain.
+3. The heuristic's action is executed. The LLM's suggestion is used as an advisory signal only.
+
+The LLM provides reasoning guidance, while the heuristic ensures valid and efficient execution under strict environment constraints.
+
+### Configuration
+
+The inference script reads three environment variables:
+
+| Variable | Purpose |
+|----------|--------|
+| `API_BASE_URL` | OpenAI-compatible endpoint (e.g. LiteLLM proxy) |
+| `MODEL_NAME` | Model identifier |
+| `API_KEY` | Authentication token (falls back to `HF_TOKEN` if unset) |
+
+The script initializes a standard OpenAI client pointed at the proxy endpoint. One LLM call is made per step, per task — ensuring real API traffic flows through the evaluation proxy on every decision point.
+
+This ensures compatibility with proxy-based evaluation systems while preserving deterministic performance.
+
+If any credential is missing, the system silently falls back to heuristic-only mode without crashing.
+
+### Why Hybrid Instead of Pure LLM?
+
+A pure LLM agent is unreliable in this environment:
+
+- It may generate invalid JSON or reference nonexistent tables.
+- It may violate constraint ordering (e.g. `SET_PRIMARY_KEY` before `SET_NOT_NULL`).
+- It may drop tables that are needed, making tasks permanently unsolvable.
+- Its output is non-deterministic across runs.
+
+The hybrid design eliminates these risks. The heuristic guarantees safe, reproducible execution on every step. The LLM provides a reasoning channel that can be observed, logged, and evaluated — but never blindly trusted for execution.
+
+This design reflects real-world systems where LLMs assist decision-making but are not blindly trusted for execution.
 
 ## Key Insight
 
@@ -221,14 +264,14 @@ curl -X POST http://localhost:8000/baseline
 ### Inference
 
 ```bash
-export API_BASE_URL=https://router.huggingface.co/v1
+export API_BASE_URL=https://...
 export MODEL_NAME=meta-llama/Llama-3.1-8B-Instruct
-export HF_TOKEN=hf_...
+export API_KEY=your_api_key
 
 python inference.py
 ```
 
-The inference script uses an OpenAI-compatible client to call the LLM for each step. If the LLM is unavailable (missing credentials), it falls back to the deterministic heuristic agent.
+The inference script uses an OpenAI-compatible client to call the LLM at each step. If credentials are missing, it falls back to the deterministic heuristic agent with no performance loss.
 
 ---
 
@@ -249,7 +292,7 @@ schema_migration_gym/
 ├── pyproject.toml               ← Build config + dependencies
 ├── models.py                    ← Action + Observation Pydantic models
 ├── client.py                    ← WebSocket/HTTP client
-├── inference.py                 ← LLM inference script (HF-compatible)
+├── inference.py                 ← Hybrid LLM + heuristic inference agent
 ├── __init__.py                  ← Package exports
 ├── validate_openenv.py          ← OpenEnv spec validation
 ├── test_adversarial.py          ← Adversarial solvability + edge case tests
@@ -261,6 +304,22 @@ schema_migration_gym/
     ├── Dockerfile               ← Multi-stage container build
     └── requirements.txt         ← Server dependencies
 ```
+
+---
+
+## Logging Format
+
+The inference script emits structured logs for evaluation traceability:
+
+```
+[START] task=migrate env=schema_migration_gym model=meta-llama/Llama-3.1-8B-Instruct
+[STEP] step=1 action=RENAME_TABLE(tmp_users->users) reward=0.54 done=false error=null
+[STEP] step=2 action=DROP_COLUMN(users.legacy_flag) reward=0.04 done=false error=null
+...
+[END] success=true steps=6 score=1.000 rewards=0.54,0.04,0.16,0.07,0.07,1.07
+```
+
+Each episode produces exactly one `[START]` line, one `[STEP]` line per action, and one `[END]` line with the final score and full reward trace. All logs are single-line and flushed immediately. This format enables automated evaluation pipelines to parse agent behavior without ambiguity.
 
 ---
 

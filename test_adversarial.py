@@ -84,7 +84,7 @@ with open("inference.py") as f:
 check("inference.py uses OpenAI", "from openai import OpenAI" in inf_content or "OpenAI" in inf_content)
 check("inference.py reads API_BASE_URL", "API_BASE_URL" in inf_content)
 check("inference.py reads MODEL_NAME", "MODEL_NAME" in inf_content)
-check("inference.py reads HF_TOKEN", "HF_TOKEN" in inf_content)
+check("inference.py reads API_KEY or HF_TOKEN", "API_KEY" in inf_content or "HF_TOKEN" in inf_content)
 
 # ===== SECTION 3: TASK SOLVABILITY =====
 print("\n" + "=" * 60)
