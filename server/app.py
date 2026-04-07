@@ -143,7 +143,7 @@ def grade_episode(episode: dict):
     # Find the task
     task = next((t for t in TASKS if t["name"] == task_name), None)
     if task is None:
-        return {"error": f"Unknown task '{task_name}'", "score": 0.0}
+        return {"error": f"Unknown task '{task_name}'", "score": 0.01}
 
     env = SchemaMigrationGymEnvironment()
     env._state.step_count = 0

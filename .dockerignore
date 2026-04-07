@@ -20,4 +20,3 @@ test_adversarial.py
 test_env.py
 evaluate_env.py
 client.py
-*.txt
