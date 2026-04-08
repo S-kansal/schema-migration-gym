@@ -28,12 +28,15 @@ from server.heuristic import select_action as heuristic_select
 from models import SchemaMigrationGymAction
 
 # =====================================================================
-#  CONFIGURATION — STRICT: crash if missing
+#  CONFIGURATION — safe defaults, never crash on missing env vars
 # =====================================================================
 
-API_BASE_URL = os.environ["API_BASE_URL"]
-API_KEY = os.environ["API_KEY"]
-MODEL_NAME = os.environ["MODEL_NAME"]
+API_BASE_URL = os.getenv("API_BASE_URL", "https://router.huggingface.co/v1")
+MODEL_NAME = os.getenv("MODEL_NAME", "Qwen/Qwen2.5-72B-Instruct")
+API_KEY = os.getenv("API_KEY") or os.getenv("HF_TOKEN")
+
+if not API_KEY:
+    raise RuntimeError("Missing API_KEY or HF_TOKEN environment variable")
 
 ENV_NAME = "schema_migration_gym"
 
